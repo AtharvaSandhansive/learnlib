@@ -112,10 +112,12 @@ int pointers(){
 
     //assigning a variable
     int a = 42;
+    //ASM: mov DWORD PTR [rbp-4], 42
 
     //sizeof() returns the memory size of the variable or in profesional lingo
     //gives the size in bytes of the type of its operand, or of the type itself.
     int size_of_a = sizeof(a);
+    //ASM: mov DWORD PTR [rbp-8], 4
     /* c++ has specific sizes for every datatype
         1. char = 1 byte
         2. short = 2 byte
@@ -125,7 +127,7 @@ int pointers(){
         6. float = 4 bytes
         7. double = 8 bytes
     */
-
+   
     /*
         OPERATORS SUMMARY!
         1. & (Address-of operator): It allows us to access the memory address of the variable 
@@ -137,6 +139,10 @@ int pointers(){
 
     //Pointers
     int* p = &a;
+    /*ASM:
+        lea rax, [rbp-20]
+        mov QWORD PTR [rbp-16], rax
+    */
     /*
         Pointer is a variable that stores memory address of another variable.
         Its a object whose stored value is a pointer value.
@@ -171,6 +177,7 @@ int pointers(){
         &p  → "Where is the pointer object itself?"
         *p  → "What object does that pointer point at?"
     */
+    
 
     /*
         Why create a pointer at all?
@@ -216,14 +223,28 @@ int pointers(){
 
     //deferencing a pointer; accessing the datablock the pointer is pointing to
     int b = *p;
+    /*ASM:
+        mov rax, QWORD PTR [rbp-16]
+        mov eax, DWORD PTR [rax]
+        mov DWORD PTR [rbp-20], eax
+    */
     //now b = whatever p is pointing to and p is pointing to a, so b = a
 
     //Multiple pointers; u can create pointers for pointers, pointers for everyone!
     int** q = &p; //double pointer
-    int*** r = &q; //triple pointer
+    /*ASM:
+        lea rax, [rbp-32]
+        mov QWORD PTR [rbp-16], rax 
+    */
 
+    int*** r = &q; //triple pointer
+    /*ASM
+        lea rax, [rbp-40]
+        mov QWORD PTR [rbp-16], rax
+    */
     //Null pointers
     int* n = nullptr;
+    //ASM: mov QWORD PTR [rbp-24], 0
     /*
         Null pointers are special type of pointers in which 
         they have their memory address but they point to nothing
@@ -251,6 +272,10 @@ int pointers(){
 
     //void pointers
     void* v = &a;
+    /*ASM:
+        lea rax, [rbp-36]
+        mov QWORD PTR [rbp-32], rax
+    */
     /*
         Void pointer point to a variable irrespective of its data type
 
@@ -282,6 +307,28 @@ int pointers(){
     int* val_ptr = new int (67);
     delete val_ptr;
     val_ptr = nullptr; //reset it
+    /*ASM:
+        "main"
+                mov     edi, 4
+                call    "operator new(unsigned long)"
+                mov     DWORD PTR [rax], 67
+                mov     edx, 0
+                mov     QWORD PTR [rbp-8], rax
+                test    dl, dl
+                je      .L2
+                mov     esi, 4
+                mov     rdi, rax
+                call    "operator delete(void*, unsigned long)"
+        .L2:
+                mov     rax, QWORD PTR [rbp-8]
+                test    rax, rax
+                je      .L3
+                mov     esi, 4
+                mov     rdi, rax
+                call    "operator delete(void*, unsigned long)"
+        .L3:
+                mov     QWORD PTR [rbp-8], 0
+    */
     /*
         Here we created an int val and assign value 67 to it.
         We then create a pointer val_ptr and point it to val.
@@ -307,6 +354,29 @@ int pointers(){
     int* value_ptr1 = &value;
     //and this
     int* value_ptr2 = new int (69);
+    /*ASM
+        For;
+        int value = 69;
+        int* value_ptr1 = &value; ->
+
+        mov     DWORD PTR [rbp-20], 69
+        lea     rax, [rbp-20]
+        mov     QWORD PTR [rbp-8], rax
+
+        For;
+        int* value_ptr2 = new int (69); ->
+
+        mov     edi, 4
+        call    "operator new(unsigned long)"
+        mov     DWORD PTR [rax], 69
+        mov     edx, 0
+        mov     QWORD PTR [rbp-16], rax
+        test    dl, dl
+        je      .L2
+        mov     esi, 4
+        mov     rdi, rax
+        call    "operator delete(void*, unsigned long)"
+    */
     /*
         While both result in a pointer (val_ptr) pointing to a value,
         they handle memory management, lifetime, and locations completely differently.
@@ -314,8 +384,9 @@ int pointers(){
 
         1. Heap Approach (dynamic)
         This int* val_ptr = new int(67); uses the new keyword which bypasses the local scope 
-        entirely. It goes out the to the system heap, allocates a fresh 4-byte and drops 
-        value 67 inside it. It then hands back back this anonymous address and saves it 
+        entirely. It goes out the to the system heap (by invokinh the operator new call), 
+        allocates a fresh 4-byte and drops value 67 inside it. 
+        It then hands back back this anonymous address and saves it 
         inside the val_ptr. If the function ends, val_ptr disappears, 
         but the box containing 67 stays on the heap forever (a memory leak) 
         unless you explicitly wrote delete val_ptr; beforehand.
@@ -332,3 +403,154 @@ int pointers(){
 
     return 0;
 }
+
+/*
+    DIFFERENCE BETWEEN STACK and HEAP
+
+    Both are areas in memory for storage associated with a running program, but they have
+    different alloc. mechanics, lifetime and purposes
+
+    1. STACK:
+     The stack is used for automatic storage associated with function
+    execution.
+
+    When a function is called, it gets a stack frame (activation record)
+    Local variables can be stored within this frame.
+
+        int value = 69;
+    
+        Stack
+        ┌─────────────────────┐
+        │ function frame      │
+        │                     │
+        │ value = 69          │
+        │                     │
+        └─────────────────────┘
+                  ↑
+             stack pointer /
+             frame pointer
+
+    When the function's execution ends, its stack frame is removed.
+    Therefore, objects with automatic storage duration normally cease
+    to exist when their scope/lifetime ends.
+
+    Example:
+        void function(){
+
+            int value = 69;
+            int* ptr = &value;
+
+        } // value's lifetime ends here
+
+    ptr must not be used to access value after value's lifetime ends.
+    The pointer would be dangling.
+
+    2. HEAP
+
+    Dynamic storage is used when we need an object's lifetime to be
+    controlled independently of the current scope.
+
+        int* ptr = new int(69);
+
+
+        Stack                         Dynamic Storage
+
+        ┌───────────────┐             ┌───────────────┐
+        │ ptr           │────────────→│      69       │
+        │ 0x...         │             │               │
+        └───────────────┘             └───────────────┘
+
+        ptr itself is a local variable.
+        The int object it points to has dynamic storage duration.
+
+    The pointer variable and the object it points to are therefore
+    TWO DIFFERENT objects with potentially different lifetimes.
+
+    The pointer can disappear while the dynamically allocated object
+    remains alive.
+
+    {
+        int* ptr = new int(69);
+    }
+
+    Here ptr disappears at the end of the scope, but the dynamically
+    allocated int has not been released.
+
+    The allocation has therefore become unreachable, producing a memory leak.
+
+    To release the dynamically allocated object:delete ptr;
+
+    3. IMPORTANT DIFFERENCES:
+    Stack: Storage lifetime is tied to automatic execution/scope.
+
+    Dynamic storage: Storage lifetime is explicitly managed through the dynamic allocation 
+    mechanism.
+
+    Therefore:
+
+        int value = 69;
+
+        value -> object with automatic storage duration
+        
+
+        int* ptr = new int(69);
+
+        ptr -> pointer object with automatic storage duration
+
+        *ptr -> dynamically allocated int
+        
+    4. POINTER != HEAP
+    "A pointer is stored on the heap."
+    No it isnt.
+    A pointer is simply an object that stores a pointer value.
+
+    Where the pointer itself is stored depends on how the pointer
+    object was created. int* ptr = new int(69);
+
+    ptr may be stored in the current function's stack frame while
+    the int it points to exists in dynamic storage.
+
+    Therefore:POINTER LOCATION!=LOCATION OF OBJECT IT POINTS TO
+
+    5. STACK DOESNT MEAN VARIABLE and HEAP DOESNT MEAN PTR
+    These are storage/lifetime concepts, not data types.
+
+    int value = 69;
+
+    creates an int with automatic storage duration.
+
+    int* ptr = &value;
+
+    creates a pointer object with automatic storage duration.
+
+    int* ptr = new int(69);
+
+    creates:
+        1. a pointer object with automatic storage duration
+        2. an int object with dynamic storage duration
+
+    SIMPLIFIED MODEL:
+
+    PROCESS MEMORY
+
+        ┌─────────────────────────────────────┐
+        │              STACK                  │
+        │                                     │
+        │      function frames                │
+        │      local objects                  │
+        │      pointer variables              │
+        │                                     │
+        ├─────────────────────────────────────┤
+        │                                     │
+        │              ...                    │
+        │                                     │
+        ├─────────────────────────────────────┤
+        │              HEAP                   │
+        │                                     │
+        │      dynamically allocated          │
+        │      storage                        │
+        │                                     │
+        └─────────────────────────────────────┘
+
+
+*/
