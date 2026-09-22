@@ -6,41 +6,39 @@ int arrays(){
     //Arrays
     //declaring a arr; telling os to  create an array with the elements inside it
     int scores[5] = {1, 2, 3, 4, 5};
+    /*ASM:
+        mov     DWORD PTR [rbp-32], 1
+        mov     DWORD PTR [rbp-28], 2
+        mov     DWORD PTR [rbp-24], 3
+        mov     DWORD PTR [rbp-20], 4
+        mov     DWORD PTR [rbp-16], 5
+    */
     //creating a contigious block of memeory
 
-    //asking os to give you 5 blocks of memory
-    int* k = new int[5]; //now os has gave me 5blocks of continous memory
-    //now k only stores the memory address of the first block/ index 0
-
+    
+    int* k = new int[5]; 
+    /*ASM:
+        mov     edi, 20
+        call    "operator new[](unsigned long)"
+        mov     QWORD PTR [rbp-8], rax
+    
+    */
     /*
-        |--------k0--------|
-        ____________________
-        |  0x10010         |  
-        |__________________|  
-        |  null            | 
-        |__________________|
-        |-----4 bytes------|
+        Requests dynamic storage sufficient for 5 int objects.
+        If int is 4 bytes: 5 × 4 = 20 bytes
+        The C++ dynamic allocation machinery obtains suitable storage
+        and returns the address of the first element.
 
-        |--------k1--------|
-        ____________________
-        |  0x10011         |  
-        |__________________|  
-        |  null            | 
-        |__________________|
-        |-----4 bytes------|
-
-        |--------k2--------|
-        ____________________
-        |  0x10012         |  
-        |__________________|  
-        |  null            | 
-        |__________________|
-        |-----4 bytes------|
-        ...and so on...
+        k stores that address. iT only stores the memory address of the first block/ index 0
     */
 
     //acessing the first element of the array since k is mem address of 1st element
     int k0 = *k; 
+    /*ASM:
+        mov     rax, QWORD PTR [rbp-8]
+        mov     eax, DWORD PTR [rax]
+        mov     DWORD PTR [rbp-12], eax
+    */
 
     //to access the next element simple add 1 to the index 0 mem address i.e. k so;
     int k1 = *(k+1);

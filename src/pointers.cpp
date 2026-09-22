@@ -112,7 +112,11 @@ int pointers(){
 
     //assigning a variable
     int a = 42;
-    //ASM: mov DWORD PTR [rbp-4], 42
+    //
+    /*
+        ASM: mov DWORD PTR [rbp-4], 42
+        rbp: This a 
+    */
 
     //sizeof() returns the memory size of the variable or in profesional lingo
     //gives the size in bytes of the type of its operand, or of the type itself.
@@ -553,4 +557,214 @@ int pointers(){
         └─────────────────────────────────────┘
 
 
+*/
+
+/*
+    <higher address>
+
+1. Setup 
+[main's base] 0x1000 <- rbp
+[MAIN'S local data] 0x99C-0x968 (local data used)
+[Top of main() stack] 0x960 <- rsp (lowest element in stack as of now) 
+
+2. call "caller()"
+[main's base] 0x1000 <- rbp
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958 <- rsp 
+
+Apparantly this ADDR_MAIN_NEXT is some kind of instruction that tells cpu to load the instruction in RIP register, because giving CPU only the address of main function (0x1000) to return isnt enough, the cpu needs to know what to do with this address, correct me if im wrong but thats dementia on another level
+
+3. The execution pointer jumps to caller() now, and now we store the actual return address for main(). SO rsp moves down again by 8 bytes
+[main's base] 0x1000 <- rbp
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rsp (moved down by 8 bytes)
+
+4. mov rbp, rsp : This instruction makes rbp copies the current address held in rsp (0x950), this anchors the base pointer for caller()
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rsp, rbp (rbp moved to rsp pos)
+
+5. sub rsp, 16
+This subtracts 16 bytes from rsp memory address 
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp (acts as a frozen anchor)
+[empty] 0x94C
+[empty] 0x948
+[empty] 0x944 <- rsp
+
+6. mov DWORD PTR [rbp-4], 6 and mov DWORD PTR [rbp-8], 7: This is saying move 6 at memory positionm rbp-4 and 7 at rbp - 8
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp (acts as a frozen anchor)
+[6] 0x94C
+[7] 0x94C ([rbp-4] = 0x950 - 4 = 0x94C)
+[empty space for c (return of add())] 0x944 <- rsp ([rbp-8] = 0x950 - 4 = 0x944)
+
+7. Now we prepare arguments for add() function since add() taks two arguments as add(int a, int b)
+If it didnt took any parameters this step would be skipped)
+mov edx, DWORD PTR [rbp-8] Copies data inside from [rbp-8] (6) to edx (lower half of rdx) register
+mov eax, DWORD PTR [rbp-4] Copies data inside from [rbp-4] (7) to eax (lower half of rax) register
+
+SInce this exist in register not stack, there wont be a stakc representation here
+
+8. call    "add(int, int)"
+This calls the add function now, so the execution pointer jumps here.
+The cpu drops rsp by 8 bytes and put the instruction for returning back to caller, ADDR_CALLER_NEXT
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp 
+[6] 0x94C
+[7] 0x948 
+[empty space for c (return of add())] 0x944
+[ADDR_CALLER_NEXT] 0x938 <- rsp
+
+9. push rbp
+Now we are inside add(int, int). now we push the address of caller() base back so we can go back to caller() after executing add(), since we added the instruction for it (ADDR_CALLER_NEXT) we now give it the address to go back where i.e. address of base of caller() i.e. where we left rbp anchoered i.e. address of rbp. THATS The whole game... 
+SO push rsp by 8 bytes again to store the address of rbp
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp 
+[6] 0x94C
+[7] 0x948 
+[empty space for c (return of add())] 0x944
+[ADDR_CALLER_NEXT] 0x938
+[0x950 (*[rpb])] 0x930 <- rsp 
+
+10. mov rbp, rsp
+Second line inside add(). SImilar to caller() back we make rbp copies rsp (0x930) to set up add's temporary base i.e. move rbp to where rsp is now...
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 (rbp previous position)
+[6] 0x94C
+[7] 0x948 
+[empty space for c (return of add())] 0x944
+[ADDR_CALLER_NEXT] 0x938
+[0x950 (*[rpb])] 0x930 <- rsp, rbp
+
+11. add eax, edx
+This is where the actual operatiojn happen. back in point 7, we put the values from stack in  the register which are still there
+This literally means eax = eax + edx = 6 + 7 = 13
+
+12. pop rbp
+THis does two things
+a. It looks at where rsp is pointing right now (0x930), reads the value stored there (0x950), and forces that value back into the rbp register
+SO it says Hey rbp where you are check the address inside and jump to it (i.e. 0x950)
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp
+[6] 0x94C
+[7] 0x948 
+[empty space for c (return of add())] 0x944
+[ADDR_CALLER_NEXT] 0x938
+[0x950 (*[rpb])] 0x930 <- rsp
+
+b. it increments rsp by 8 bytes i.e. moves up rsp
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp
+[6] 0x94C
+[7] 0x948 
+[empty space for c (return of add())] 0x944
+[ADDR_CALLER_NEXT] 0x938 <- rsp
+[0x950 (*[rpb])] 0x930 
+
+13. ret
+The ret instruction does two things automatically:
+a. It pops the value at the current rsp (0x938), which is ADDR_CALLER_NEXT, and throws it directly into the RIP (Instruction Pointer) register. This cures the CPU's dementia; the execution pointer instantly flashes back to caller()
+so RIP = *[rsp] = *[0x938] 
+b. It increments rsp by 8 bytes (0x938 -> 0x944)
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp
+[6] 0x94C
+[7] 0x948 
+[empty space for c (return of add())] 0x944 <- rsp (back at caller's top element baby!)
+[ADDR_CALLER_NEXT] 0x938
+[0x950 (*[rpb])] 0x930 
+
+14.  mov DWORD PTR [rbp-12], eax
+This basically gets back the calculated result by the add() function at the rbp-12 position i.e. 0x950-12 = 0x944, the space reserved for C i.e. rsp is currently now
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp
+[6] 0x94C
+[7] 0x948 
+[13] 0x944 <- rsp
+
+15. nop (no operation)
+This tells cpu to do absolutely nothing for one cpu cycle.
+If a function ends a little too early and leaves an uneven gap in memory, the compiler will pad the empty space with nop instructions. This ensures that the next function starts at a perfectly aligned, clean memory address so the CPU can read it at maximum speed. THis is unopt code o0 so thats why maybe it have added that
+
+16. leave
+leave does two operations at once mov rsp, rbp and pop rbp
+a. mov rsp, rbp
+
+[main's base] 0x1000
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958
+[0x1000 (return address of main)] 0x950 <- rbp, rsp 
+[6] 0x94C
+[7] 0x948 
+[13] 0x944
+
+b. pop rbp
+
+Tells rbp to read the address inside i.e. 0x1000 and jump there and also increments rsp by one address
+
+[main's base] 0x1000 <- rbp (restored to main)
+...
+[MAIN'S local data] 0x960 
+[ADDR_MAIN_NEXT] 0x958 <- rsp
+[0x1000 (return address of main)] 0x950
+[6] 0x94C
+[7] 0x948 
+[13] 0x944
+
+17. ret
+Just like before, The CPU pops ADDR_MAIN_NEXT from 0x958 into the RIP register and rsp moves up 8 bytes (0x958 -> 0x960)
+[main's base]                        0x1000 <- rbp
+...
+[MAIN'S local data]                  0x960  <- rsp
+[ADDR_MAIN_NEXT] 0x958 
+
+We are now fully back to main. Loop at the starting and ending state of the stack
+[main's base] 0x1000 <- rbp
+[MAIN'S local data] 0x99C-0x968 (local data used)
+[Top of main() stack] 0x960 <- rsp (lowest element in stack as of now) 
+
+Perfect end.
+
+<lower address>
 */
