@@ -560,7 +560,64 @@ int pointers(){
 */
 
 /*
-    <higher address>
+
+C++ CODE:
+
+
+int add(int a, int b){
+    return a + b;
+}
+
+void caller(){
+    int a = 6;
+    int b = 7;
+    int c = add(a, b);
+}
+
+int main(){
+    caller();
+
+    return 0;
+}
+
+asm code:
+"add(int, int)":
+        push    rbp
+        mov     rbp, rsp
+        mov     DWORD PTR [rbp-4], edi
+        mov     DWORD PTR [rbp-8], esi
+        mov     edx, DWORD PTR [rbp-4]
+        mov     eax, DWORD PTR [rbp-8]
+        add     eax, edx
+        pop     rbp
+        ret
+"caller()":
+        push    rbp
+        mov     rbp, rsp
+        sub     rsp, 16
+        mov     DWORD PTR [rbp-4], 6
+        mov     DWORD PTR [rbp-8], 7
+        mov     edx, DWORD PTR [rbp-8]
+        mov     eax, DWORD PTR [rbp-4]
+        mov     esi, edx
+        mov     edi, eax
+        call    "add(int, int)"
+        mov     DWORD PTR [rbp-12], eax
+        nop
+        leave
+        ret
+"main":
+        push    rbp
+        mov     rbp, rsp
+        call    "caller()"
+        mov     eax, 0
+        pop     rbp
+        ret
+        
+  
+EXPLAINATION of Stack, rsp and rbp working using asm instructions
+
+<higher address>
 
 1. Setup 
 [main's base] 0x1000 <- rbp
